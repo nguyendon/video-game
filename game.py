@@ -92,9 +92,6 @@ class Game:
         self.base_obstacle_size = 50
         self.base_powerup_size = 30
 
-        # Initialize sizes
-        self.update_scale_factors()
-
         # Player settings
         self.player_size = self.base_player_size
         self.player_x = self.width // 2 - self.player_size // 2
@@ -137,6 +134,9 @@ class Game:
             POWERUP_DOUBLE_POINTS: None,
             POWERUP_SLOW_OBSTACLES: None
         }
+
+        # Initialize sizes
+        self.update_scale_factors()
 
         # Game state
         self.game_over = False
