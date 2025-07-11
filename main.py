@@ -1,10 +1,15 @@
 import pygame
 import random
 import time
-import asyncio
+import asyncio  # Add asyncio import
 
 # Initialize Pygame
 pygame.init()
+
+# Get the current screen info
+screen_info = pygame.display.Info()
+DESKTOP_WIDTH = screen_info.current_w
+DESKTOP_HEIGHT = screen_info.current_h
 
 # Base resolution (for scaling calculations)
 BASE_WIDTH = 800
@@ -14,8 +19,8 @@ BASE_HEIGHT = 600
 WIDTH = BASE_WIDTH
 HEIGHT = BASE_HEIGHT
 
-# Create window - for web, don't use RESIZABLE
-window = pygame.display.set_mode((WIDTH, HEIGHT))
+# Create resizable window
+window = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Coin Collector")
 
 # Scale factor for game objects
@@ -78,6 +83,7 @@ class PowerUp:
 class Game:
     def __init__(self):
         # Screen settings
+        self.fullscreen = False
         self.width = WIDTH
         self.height = HEIGHT
 
@@ -143,9 +149,53 @@ class Game:
             POWERUP_SLOW_OBSTACLES: None
         }
 
+        # Initialize sizes
+        self.update_scale_factors()
+
         # Game state
         self.game_over = False
         self.score = 0
+
+    def update_scale_factors(self):
+        global scale_x, scale_y
+        scale_x = self.width / BASE_WIDTH
+        scale_y = self.height / BASE_HEIGHT
+
+        # Update sizes based on new scale
+        self.player_size = int(self.base_player_size * min(scale_x, scale_y))
+        self.coin_size = int(self.base_coin_size * min(scale_x, scale_y))
+        self.obstacle_size = int(self.base_obstacle_size * min(scale_x, scale_y))
+        self.player_speed = self.base_player_speed * min(scale_x, scale_y)
+        self.coin_speed = self.base_coin_speed * min(scale_x, scale_y)
+        self.obstacle_speed = self.base_obstacle_speed * min(scale_x, scale_y)
+        self.power_up_speed = self.base_power_up_speed * min(scale_x, scale_y)
+
+        # Update power-up sizes
+        for power_up in self.power_ups:
+            power_up.scale(scale_x, scale_y)
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            self.width = DESKTOP_WIDTH
+            self.height = DESKTOP_HEIGHT
+            self.window = pygame.display.set_mode((self.width, self.height), pygame.FULLSCREEN)
+        else:
+            self.width = BASE_WIDTH
+            self.height = BASE_HEIGHT
+            self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+
+        # Update positions and sizes
+        self.update_scale_factors()
+        self.player_x = min(max(self.player_x * (self.width / WIDTH), 0),
+                           self.width - self.player_size)
+        self.player_y = self.height - self.player_size - 10
+
+    def handle_resize(self, size):
+        self.width, self.height = size
+        self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+        self.update_scale_factors()
+        self.player_y = self.height - self.player_size - 10
 
     def create_coin(self):
         return {
@@ -189,9 +239,9 @@ class Game:
         # Reset level
         self.level = 1
         self.coins_collected_this_level = 0
-        self.coin_speed = self.base_coin_speed
-        self.obstacle_speed = self.base_obstacle_speed
-        self.original_obstacle_speed = self.obstacle_speed
+        self.coin_speed = self.base_coin_speed * min(scale_x, scale_y)
+        self.obstacle_speed = self.base_obstacle_speed * min(scale_x, scale_y)
+        self.original_obstacle_speed = self.obstacle_speed  # Reset original speed
 
         # Reset coins and obstacles
         self.coins = [self.create_coin()]
@@ -226,9 +276,11 @@ class Game:
 
         # Increase speeds based on level
         self.coin_speed = (self.base_coin_speed *
-                          (self.level_multiplier ** (self.level - 1)))
+                          (self.level_multiplier ** (self.level - 1)) *
+                          min(scale_x, scale_y))
         self.obstacle_speed = (self.base_obstacle_speed *
-                             (self.level_multiplier ** (self.level - 1)))
+                             (self.level_multiplier ** (self.level - 1)) *
+                             min(scale_x, scale_y))
         self.original_obstacle_speed = self.obstacle_speed
 
         # Add more coins and obstacles as levels progress
@@ -249,10 +301,17 @@ class Game:
             if event.type == pygame.QUIT:
                 return False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_r and self.game_over:
+                if event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
+                elif event.key == pygame.K_r and self.game_over:
                     self.reset_game()
                 elif event.key == pygame.K_ESCAPE:
-                    return False
+                    if self.fullscreen:
+                        self.toggle_fullscreen()
+                    else:
+                        return False
+            elif event.type == pygame.VIDEORESIZE and not self.fullscreen:
+                self.handle_resize(event.size)
         return True
 
     def update_power_ups(self):
@@ -379,8 +438,8 @@ class Game:
                     self.power_ups.remove(power_up)
 
     def draw_power_up_status(self):
-        font = pygame.font.Font(None, 24)
-        y_offset = 80
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
+        y_offset = int(80 * scale_y)
 
         for power_up_type, power_up in self.active_power_ups.items():
             if power_up and power_up.active:
@@ -389,7 +448,7 @@ class Game:
                     text = f"{power_up_type.title()}: {time_left:.1f}s"
                     text_surface = font.render(text, True, power_up.color)
                     window.blit(text_surface, (10, y_offset))
-                    y_offset += 25
+                    y_offset += int(25 * scale_y)
 
     def draw_diamond(self, surface, color, x, y, size):
         points = [
@@ -402,10 +461,10 @@ class Game:
 
     def draw_health_bar(self):
         # Health bar background
-        bar_width = 200
-        bar_height = 20
-        bar_x = 10
-        bar_y = 40
+        bar_width = int(200 * scale_x)
+        bar_height = int(20 * scale_y)
+        bar_x = int(10 * scale_x)
+        bar_y = int(40 * scale_y)
         pygame.draw.rect(window, RED, (bar_x, bar_y, bar_width, bar_height))
 
         # Health bar fill
@@ -414,16 +473,16 @@ class Game:
         pygame.draw.rect(window, GREEN, (bar_x, bar_y, health_width, bar_height))
 
         # Health text
-        font = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
         health_text = font.render(f'Health: {int(health_percentage * 100)}%', True, WHITE)
         window.blit(health_text, (bar_x + bar_width + 10, bar_y + 2))
 
     def draw_level_progress(self):
         # Level progress bar
-        bar_width = 200
-        bar_height = 20
-        bar_x = self.width - bar_width - 10
-        bar_y = 40
+        bar_width = int(200 * scale_x)
+        bar_height = int(20 * scale_y)
+        bar_x = self.width - bar_width - int(10 * scale_x)
+        bar_y = int(40 * scale_y)
         pygame.draw.rect(window, BLUE, (bar_x, bar_y, bar_width, bar_height))
 
         # Progress fill
@@ -432,7 +491,7 @@ class Game:
         pygame.draw.rect(window, PURPLE, (bar_x, bar_y, progress_width, bar_height))
 
         # Progress text
-        font = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
         progress_text = font.render(f'Level Progress: {int(progress * 100)}%', True, WHITE)
         text_rect = progress_text.get_rect(right=bar_x - 10, centery=bar_y + bar_height//2)
         window.blit(progress_text, text_rect)
@@ -463,11 +522,11 @@ class Game:
                             int(power_up.x), int(power_up.y), power_up.size)
 
         # Draw score and level
-        font = pygame.font.Font(None, 36)
+        font = pygame.font.Font(None, int(36 * min(scale_x, scale_y)))
         score_text = font.render(f'Score: {self.score}', True, WHITE)
         level_text = font.render(f'Level: {self.level}', True, WHITE)
-        window.blit(score_text, (10, 10))
-        window.blit(level_text, (self.width - 150, 10))
+        window.blit(score_text, (int(10 * scale_x), int(10 * scale_y)))
+        window.blit(level_text, (self.width - int(150 * scale_x), int(10 * scale_y)))
 
         # Draw health bar and level progress
         self.draw_health_bar()
@@ -479,7 +538,7 @@ class Game:
         # Draw power-up unlock notifications
         current_time = pygame.time.get_ticks()
         if self.newly_unlocked_powerups and current_time - self.notification_start < self.notification_duration:
-            notification_font = pygame.font.Font(None, 32)
+            notification_font = pygame.font.Font(None, int(32 * min(scale_x, scale_y)))
             y_offset = self.height // 4
 
             # Draw notification background
@@ -510,42 +569,38 @@ class Game:
             window.blit(overlay, (0, 0))
 
             # Game Over text
-            game_over_font = pygame.font.Font(None, 74)
+            game_over_font = pygame.font.Font(None, int(74 * min(scale_x, scale_y)))
             game_over_text = game_over_font.render('Game Over!', True, RED)
-            game_over_rect = game_over_text.get_rect(center=(self.width//2, self.height//2 - 50))
+            game_over_rect = game_over_text.get_rect(center=(self.width//2, self.height//2 - int(50 * scale_y)))
             window.blit(game_over_text, game_over_rect)
 
             # Final score and level
-            final_score_font = pygame.font.Font(None, 48)
+            final_score_font = pygame.font.Font(None, int(48 * min(scale_x, scale_y)))
             final_score_text = final_score_font.render(f'Final Score: {self.score} - Level: {self.level}', True, WHITE)
-            final_score_rect = final_score_text.get_rect(center=(self.width//2, self.height//2 + 20))
+            final_score_rect = final_score_text.get_rect(center=(self.width//2, self.height//2 + int(20 * scale_y)))
             window.blit(final_score_text, final_score_rect)
 
             # Restart instruction
-            restart_font = pygame.font.Font(None, 36)
+            restart_font = pygame.font.Font(None, int(36 * min(scale_x, scale_y)))
             restart_text = restart_font.render('Press R to Restart or ESC to Quit', True, GREEN)
-            restart_rect = restart_text.get_rect(center=(self.width//2, self.height//2 + 80))
+            restart_rect = restart_text.get_rect(center=(self.width//2, self.height//2 + int(80 * scale_y)))
             window.blit(restart_text, restart_rect)
 
         pygame.display.flip()
 
 async def main():
+    clock = pygame.time.Clock()
     game = Game()
     running = True
 
     while running:
-        # Handle events and update game state
         running = game.handle_events()
         game.update()
         game.draw()
-
-        # This is required for web version
-        await asyncio.sleep(0)
-
-        # Cap the frame rate
-        pygame.time.Clock().tick(60)
+        clock.tick(60)
+        await asyncio.sleep(0)  # Required for web version
 
     pygame.quit()
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     asyncio.run(main())
