@@ -22,10 +22,22 @@
             -webkit-touch-callout: none;
             -webkit-user-select: none;
             user-select: none;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
         }
         #status {
             margin: 20px 0;
             font-size: 18px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 5px;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
         }
         canvas {
             border: 2px solid #666;
@@ -46,10 +58,23 @@
             left: 0;
             right: 0;
             display: none;
-            justify-content: center;
-            gap: 20px;
-            z-index: 1000;
+            justify-content: space-between;
             padding: 20px;
+            z-index: 1000;
+            pointer-events: none;
+        }
+        .control-area {
+            width: 50%;
+            height: 100vh;
+            position: fixed;
+            bottom: 0;
+            display: none;
+        }
+        #left-area {
+            left: 0;
+        }
+        #right-area {
+            right: 0;
         }
         .control-btn {
             width: 80px;
@@ -62,8 +87,8 @@
             justify-content: center;
             font-size: 24px;
             color: white;
-            touch-action: none;
-            -webkit-tap-highlight-color: transparent;
+            pointer-events: all;
+            margin: 0 20px;
         }
         .control-btn:active {
             background-color: rgba(255, 255, 255, 0.4);
@@ -72,12 +97,16 @@
             #mobile-controls {
                 display: flex;
             }
+            .control-area {
+                display: block;
+            }
             #controls {
                 display: none;
             }
             canvas {
                 width: 100% !important;
                 height: auto !important;
+                max-height: calc(100vh - 140px) !important;
             }
         }
     </style>
@@ -85,19 +114,23 @@
 <body>
     <div id="status">Loading...</div>
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="left-area" class="control-area"></div>
+    <div id="right-area" class="control-area"></div>
     <div id="mobile-controls">
         <div class="control-btn" id="left-btn">←</div>
         <div class="control-btn" id="right-btn">→</div>
     </div>
     <div id="controls">
         <h2>Controls</h2>
-        <p>← → Arrow keys or touch buttons to move</p>
+        <p>← → Arrow keys or touch sides to move</p>
         <p>Tap screen to restart when game over</p>
     </div>
     <script type="text/javascript">
         const status_elem = document.getElementById("status");
         const leftBtn = document.getElementById("left-btn");
         const rightBtn = document.getElementById("right-btn");
+        const leftArea = document.getElementById("left-area");
+        const rightArea = document.getElementById("right-area");
         const canvas = document.getElementById("canvas");
         
         let leftPressed = false;
@@ -106,112 +139,96 @@
 
         // Show loading progress
         window.addEventListener("pygame_loaded", function(e) {
-            status_elem.innerHTML = "Game loaded! Tap to start";
+            status_elem.innerHTML = "Tap anywhere to start!";
         });
 
-        function startGame() {
-            if (!gameStarted) {
-                gameStarted = true;
-                status_elem.style.display = "none";
-                // Send a spacebar press to start the game
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space' }));
-                window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space' }));
-            }
-        }
-
-        // Handle game start
-        canvas.addEventListener('click', startGame);
-        canvas.addEventListener('touchstart', function(e) {
-            e.preventDefault();
-            startGame();
-        });
-
-        // Prevent scrolling on touch devices
-        document.body.addEventListener('touchmove', function(e) {
-            e.preventDefault();
-        }, { passive: false });
+        // Prevent default browser behaviors
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        document.addEventListener('touchstart', e => e.preventDefault(), {passive: false});
+        document.addEventListener('touchmove', e => e.preventDefault(), {passive: false});
+        document.addEventListener('touchend', e => e.preventDefault(), {passive: false});
 
         // Touch controls
-        function simulateKeyEvent(type, keyCode) {
-            const event = new KeyboardEvent(type, {
-                key: keyCode === 37 ? 'ArrowLeft' : 'ArrowRight',
-                code: keyCode === 37 ? 'ArrowLeft' : 'ArrowRight',
-                keyCode: keyCode,
-                which: keyCode,
+        function sendKey(key, isDown) {
+            const eventType = isDown ? 'keydown' : 'keyup';
+            const event = new KeyboardEvent(eventType, {
+                key: key,
+                code: key === 'ArrowLeft' ? 'ArrowLeft' : 'ArrowRight',
+                keyCode: key === 'ArrowLeft' ? 37 : 39,
+                which: key === 'ArrowLeft' ? 37 : 39,
                 bubbles: true,
                 cancelable: true
             });
-            window.dispatchEvent(event);
+            canvas.dispatchEvent(event);
         }
 
-        function handleStart(direction) {
-            if (direction === 'left') {
-                leftPressed = true;
-                simulateKeyEvent('keydown', 37); // Left arrow
-            } else {
-                rightPressed = true;
-                simulateKeyEvent('keydown', 39); // Right arrow
+        // Area touch handlers
+        leftArea.addEventListener('touchstart', () => {
+            leftPressed = true;
+            sendKey('ArrowLeft', true);
+        });
+
+        leftArea.addEventListener('touchend', () => {
+            leftPressed = false;
+            sendKey('ArrowLeft', false);
+        });
+
+        rightArea.addEventListener('touchstart', () => {
+            rightPressed = true;
+            sendKey('ArrowRight', true);
+        });
+
+        rightArea.addEventListener('touchend', () => {
+            rightPressed = false;
+            sendKey('ArrowRight', false);
+        });
+
+        // Button touch handlers
+        leftBtn.addEventListener('touchstart', () => {
+            leftPressed = true;
+            sendKey('ArrowLeft', true);
+        });
+
+        leftBtn.addEventListener('touchend', () => {
+            leftPressed = false;
+            sendKey('ArrowLeft', false);
+        });
+
+        rightBtn.addEventListener('touchstart', () => {
+            rightPressed = true;
+            sendKey('ArrowRight', true);
+        });
+
+        rightBtn.addEventListener('touchend', () => {
+            rightPressed = false;
+            sendKey('ArrowRight', false);
+        });
+
+        // Game start and restart handler
+        document.addEventListener('touchstart', (e) => {
+            if (!gameStarted) {
+                gameStarted = true;
+                status_elem.style.display = 'none';
             }
-        }
+        }, {passive: false});
 
-        function handleEnd(direction) {
-            if (direction === 'left') {
-                leftPressed = false;
-                simulateKeyEvent('keyup', 37);
-            } else {
-                rightPressed = false;
-                simulateKeyEvent('keyup', 39);
-            }
-        }
-
-        // Touch events for left button
-        leftBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handleStart('left');
-        }, { passive: false });
-
-        leftBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            handleEnd('left');
-        }, { passive: false });
-
-        // Touch events for right button
-        rightBtn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            handleStart('right');
-        }, { passive: false });
-
-        rightBtn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            handleEnd('right');
-        }, { passive: false });
-
-        // Handle game over restart
+        // Ensure controls don't interfere with canvas
         canvas.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            if (window.game_over) {
-                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', code: 'KeyR' }));
-                window.dispatchEvent(new KeyboardEvent('keyup', { key: 'r', code: 'KeyR' }));
-            }
-        }, { passive: false });
+            e.stopPropagation();
+        }, {passive: false});
 
-        // Resize handler
-        function resizeCanvas() {
-            const windowWidth = window.innerWidth;
-            const windowHeight = window.innerHeight;
-            const mobileControls = document.getElementById('mobile-controls');
-            const controlsHeight = mobileControls ? mobileControls.offsetHeight : 0;
-            
-            if (windowWidth <= 768) {
-                const maxHeight = windowHeight - controlsHeight - 40;
-                canvas.style.maxHeight = maxHeight + 'px';
-            } else {
-                canvas.style.maxHeight = 'none';
-            }
-        }
+        // Handle orientation change
+        window.addEventListener('resize', () => {
+            // Force a small delay to let the browser finish rotating
+            setTimeout(() => {
+                const vh = window.innerHeight * 0.01;
+                document.documentElement.style.setProperty('--vh', `${vh}px`);
+            }, 100);
+        });
 
-        window.addEventListener('resize', resizeCanvas);
-        window.addEventListener('load', resizeCanvas);
+        // Initial height set
+        const vh = window.innerHeight * 0.01;
+        document.documentElement.style.setProperty('--vh', `${vh}px`);
     </script>
 </body>
 </html>

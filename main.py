@@ -6,6 +6,20 @@ import asyncio  # Add asyncio import
 # Initialize Pygame
 pygame.init()
 
+# For mobile web support
+import platform
+if platform.system() == "Emscripten":
+    import javascript
+    def update_game_over_state(game_over):
+        javascript.window.game_over = game_over
+    def is_touch_device():
+        return True
+else:
+    def update_game_over_state(game_over):
+        pass
+    def is_touch_device():
+        return False
+
 # Get the current screen info
 screen_info = pygame.display.Info()
 DESKTOP_WIDTH = screen_info.current_w
@@ -19,16 +33,13 @@ BASE_HEIGHT = 600
 WIDTH = BASE_WIDTH
 HEIGHT = BASE_HEIGHT
 
-# Create resizable window
-window = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | pygame.SCALED)
-pygame.display.set_caption("Coin Collector")
+# Create resizable window with proper flags for touch support
+flags = pygame.RESIZABLE | pygame.SCALED
+if is_touch_device():
+    flags |= pygame.FULLSCREEN
 
-# For mobile web support
-import platform
-if platform.system() == "Emscripten":
-    import javascript
-    def update_game_over_state(game_over):
-        javascript.window.game_over = game_over
+window = pygame.display.set_mode((WIDTH, HEIGHT), flags)
+pygame.display.set_caption("Coin Collector")
 
 # Scale factor for game objects
 scale_x = 1.0
@@ -319,8 +330,21 @@ class Game:
                         self.toggle_fullscreen()
                     else:
                         return False
+            elif event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.FINGERDOWN:
+                # Handle touch/click for game over
+                if self.game_over:
+                    self.reset_game()
             elif event.type == pygame.VIDEORESIZE and not self.fullscreen:
                 self.handle_resize(event.size)
+        
+        # Get keyboard state for movement
+        keys = pygame.key.get_pressed()
+        if not self.game_over:
+            if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+                self.player_x = max(0, self.player_x - self.player_speed)
+            if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+                self.player_x = min(self.width - self.player_size, self.player_x + self.player_speed)
+        
         return True
 
     def update_power_ups(self):
