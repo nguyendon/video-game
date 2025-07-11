@@ -1,6 +1,7 @@
 import pygame
 import random
 import time
+import asyncio  # Add asyncio import
 
 # Initialize Pygame
 pygame.init()
@@ -587,7 +588,7 @@ class Game:
 
         pygame.display.flip()
 
-def main():
+async def main():
     clock = pygame.time.Clock()
     game = Game()
     running = True
@@ -597,8 +598,9 @@ def main():
         game.update()
         game.draw()
         clock.tick(60)
+        await asyncio.sleep(0)  # Required for web version
 
     pygame.quit()
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
