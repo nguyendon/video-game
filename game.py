@@ -16,6 +16,7 @@ BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 YELLOW = (255, 255, 0)
 GREEN = (0, 255, 0)
+BLUE = (0, 0, 255)
 
 class Game:
     def __init__(self):
@@ -24,6 +25,12 @@ class Game:
         self.player_x = WIDTH // 2 - self.player_size // 2
         self.player_y = HEIGHT - self.player_size - 10
         self.player_speed = 5
+        self.max_health = 5
+        self.current_health = self.max_health
+        self.invulnerable = False
+        self.invulnerable_timer = 0
+        self.invulnerable_duration = 1500  # 1.5 seconds of invulnerability after hit
+        self.player_color = WHITE
 
         # Coin settings
         self.coin_size = 20
@@ -42,9 +49,13 @@ class Game:
         self.game_over = False
 
     def reset_game(self):
-        # Reset player position
+        # Reset player position and health
         self.player_x = WIDTH // 2 - self.player_size // 2
         self.player_y = HEIGHT - self.player_size - 10
+        self.current_health = self.max_health
+        self.invulnerable = False
+        self.invulnerable_timer = 0
+        self.player_color = WHITE
 
         # Reset coin
         self.coin_x = random.randint(0, WIDTH - self.coin_size)
@@ -73,6 +84,20 @@ class Game:
 
     def update(self):
         if not self.game_over:
+            current_time = pygame.time.get_ticks()
+
+            # Update invulnerability
+            if self.invulnerable:
+                if current_time - self.invulnerable_timer > self.invulnerable_duration:
+                    self.invulnerable = False
+                    self.player_color = WHITE
+                else:
+                    # Flash player while invulnerable
+                    if (current_time // 200) % 2:  # Flash every 200ms
+                        self.player_color = WHITE
+                    else:
+                        self.player_color = BLUE
+
             # Player movement
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LEFT] and self.player_x > 0:
@@ -103,14 +128,41 @@ class Game:
 
             # Collision detection with obstacle
             obstacle_rect = pygame.Rect(self.obstacle_x, self.obstacle_y, self.obstacle_size, self.obstacle_size)
-            if player_rect.colliderect(obstacle_rect):
-                self.game_over = True
+            if player_rect.colliderect(obstacle_rect) and not self.invulnerable:
+                self.current_health -= 1
+                if self.current_health <= 0:
+                    self.game_over = True
+                else:
+                    # Start invulnerability period
+                    self.invulnerable = True
+                    self.invulnerable_timer = current_time
+                    # Reset obstacle position
+                    self.obstacle_y = 0
+                    self.obstacle_x = random.randint(0, WIDTH - self.obstacle_size)
+
+    def draw_health_bar(self):
+        # Health bar background
+        bar_width = 200
+        bar_height = 20
+        bar_x = 10
+        bar_y = 40
+        pygame.draw.rect(window, RED, (bar_x, bar_y, bar_width, bar_height))
+
+        # Health bar fill
+        health_percentage = self.current_health / self.max_health
+        health_width = bar_width * health_percentage
+        pygame.draw.rect(window, GREEN, (bar_x, bar_y, health_width, bar_height))
+
+        # Health text
+        font = pygame.font.Font(None, 24)
+        health_text = font.render(f'Health: {int(health_percentage * 100)}%', True, WHITE)
+        window.blit(health_text, (bar_x + bar_width + 10, bar_y + 2))
 
     def draw(self):
         window.fill(BLACK)
 
         # Draw player
-        pygame.draw.rect(window, WHITE, (self.player_x, self.player_y, self.player_size, self.player_size))
+        pygame.draw.rect(window, self.player_color, (self.player_x, self.player_y, self.player_size, self.player_size))
 
         # Draw coin
         pygame.draw.circle(window, YELLOW, (self.coin_x + self.coin_size//2, self.coin_y + self.coin_size//2), self.coin_size//2)
@@ -122,6 +174,9 @@ class Game:
         font = pygame.font.Font(None, 36)
         score_text = font.render(f'Score: {self.score}', True, WHITE)
         window.blit(score_text, (10, 10))
+
+        # Draw health bar
+        self.draw_health_bar()
 
         # Draw game over screen
         if self.game_over:
