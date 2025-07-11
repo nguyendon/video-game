@@ -5,11 +5,26 @@ import time
 # Initialize Pygame
 pygame.init()
 
-# Set up the game window
-WIDTH = 800
-HEIGHT = 600
-window = pygame.display.set_mode((WIDTH, HEIGHT))
+# Get the current screen info
+screen_info = pygame.display.Info()
+DESKTOP_WIDTH = screen_info.current_w
+DESKTOP_HEIGHT = screen_info.current_h
+
+# Base resolution (for scaling calculations)
+BASE_WIDTH = 800
+BASE_HEIGHT = 600
+
+# Initial window size
+WIDTH = BASE_WIDTH
+HEIGHT = BASE_HEIGHT
+
+# Create resizable window
+window = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
 pygame.display.set_caption("Coin Collector")
+
+# Scale factor for game objects
+scale_x = 1.0
+scale_y = 1.0
 
 # Colors
 WHITE = (255, 255, 255)
@@ -34,12 +49,12 @@ class PowerUp:
         self.x = x
         self.y = y
         self.type = type
-        self.size = 30
+        self.base_size = 30
+        self.size = self.base_size
         self.active = False
         self.start_time = 0
-        self.duration = 10  # 10 seconds for timed power-ups
+        self.duration = 10
 
-        # Set color based on power-up type
         self.color = {
             POWERUP_INVINCIBLE: GOLD,
             POWERUP_DOUBLE_POINTS: GREEN,
@@ -47,8 +62,11 @@ class PowerUp:
             POWERUP_SLOW_OBSTACLES: CYAN
         }[type]
 
+    def scale(self, scale_x, scale_y):
+        self.size = int(self.base_size * min(scale_x, scale_y))
+
     def is_expired(self):
-        if self.type == POWERUP_HEALTH:  # Health power-up is instant
+        if self.type == POWERUP_HEALTH:
             return True
         return time.time() - self.start_time > self.duration if self.active else False
 
@@ -63,16 +81,31 @@ class PowerUp:
 
 class Game:
     def __init__(self):
+        # Screen settings
+        self.fullscreen = False
+        self.width = WIDTH
+        self.height = HEIGHT
+
+        # Base sizes (for scaling)
+        self.base_player_size = 50
+        self.base_coin_size = 20
+        self.base_obstacle_size = 50
+        self.base_powerup_size = 30
+
+        # Initialize sizes
+        self.update_scale_factors()
+
         # Player settings
-        self.player_size = 50
-        self.player_x = WIDTH // 2 - self.player_size // 2
-        self.player_y = HEIGHT - self.player_size - 10
-        self.player_speed = 5
+        self.player_size = self.base_player_size
+        self.player_x = self.width // 2 - self.player_size // 2
+        self.player_y = self.height - self.player_size - 10
+        self.base_player_speed = 5
+        self.player_speed = self.base_player_speed
         self.max_health = 5
         self.current_health = self.max_health
         self.invulnerable = False
         self.invulnerable_timer = 0
-        self.invulnerable_duration = 1500  # 1.5 seconds of invulnerability after hit
+        self.invulnerable_duration = 1500
         self.player_color = WHITE
 
         # Level settings
@@ -82,13 +115,13 @@ class Game:
         self.level_multiplier = 1.2
 
         # Coin settings
-        self.coin_size = 20
+        self.coin_size = self.base_coin_size
         self.base_coin_speed = 3
         self.coin_speed = self.base_coin_speed
         self.coins = [self.create_coin()]
 
         # Obstacle settings
-        self.obstacle_size = 50
+        self.obstacle_size = self.base_obstacle_size
         self.base_obstacle_speed = 4
         self.obstacle_speed = self.base_obstacle_speed
         self.original_obstacle_speed = self.obstacle_speed
@@ -96,8 +129,9 @@ class Game:
 
         # Power-up settings
         self.power_ups = []
-        self.power_up_speed = 2
-        self.power_up_spawn_chance = 0.02  # 2% chance per frame to spawn a power-up
+        self.base_power_up_speed = 2
+        self.power_up_speed = self.base_power_up_speed
+        self.power_up_spawn_chance = 0.02
         self.active_power_ups = {
             POWERUP_INVINCIBLE: None,
             POWERUP_DOUBLE_POINTS: None,
@@ -108,15 +142,56 @@ class Game:
         self.game_over = False
         self.score = 0
 
+    def update_scale_factors(self):
+        global scale_x, scale_y
+        scale_x = self.width / BASE_WIDTH
+        scale_y = self.height / BASE_HEIGHT
+
+        # Update sizes based on new scale
+        self.player_size = int(self.base_player_size * min(scale_x, scale_y))
+        self.coin_size = int(self.base_coin_size * min(scale_x, scale_y))
+        self.obstacle_size = int(self.base_obstacle_size * min(scale_x, scale_y))
+        self.player_speed = self.base_player_speed * min(scale_x, scale_y)
+        self.coin_speed = self.base_coin_speed * min(scale_x, scale_y)
+        self.obstacle_speed = self.base_obstacle_speed * min(scale_x, scale_y)
+        self.power_up_speed = self.base_power_up_speed * min(scale_x, scale_y)
+
+        # Update power-up sizes
+        for power_up in self.power_ups:
+            power_up.scale(scale_x, scale_y)
+
+    def toggle_fullscreen(self):
+        self.fullscreen = not self.fullscreen
+        if self.fullscreen:
+            self.width = DESKTOP_WIDTH
+            self.height = DESKTOP_HEIGHT
+            self.window = pygame.display.set_mode((self.width, self.height), pygame.FULLSCREEN)
+        else:
+            self.width = BASE_WIDTH
+            self.height = BASE_HEIGHT
+            self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+
+        # Update positions and sizes
+        self.update_scale_factors()
+        self.player_x = min(max(self.player_x * (self.width / WIDTH), 0),
+                           self.width - self.player_size)
+        self.player_y = self.height - self.player_size - 10
+
+    def handle_resize(self, size):
+        self.width, self.height = size
+        self.window = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+        self.update_scale_factors()
+        self.player_y = self.height - self.player_size - 10
+
     def create_coin(self):
         return {
-            'x': random.randint(0, WIDTH - self.coin_size),
+            'x': random.randint(0, self.width - self.coin_size),
             'y': random.randint(-100, 0)
         }
 
     def create_obstacle(self):
         return {
-            'x': random.randint(0, WIDTH - self.obstacle_size),
+            'x': random.randint(0, self.width - self.obstacle_size),
             'y': random.randint(-200, -50)
         }
 
@@ -128,15 +203,15 @@ class Game:
             POWERUP_SLOW_OBSTACLES
         ])
         return PowerUp(
-            random.randint(0, WIDTH - 30),
+            random.randint(0, self.width - self.base_powerup_size),
             random.randint(-100, -30),
             power_up_type
         )
 
     def reset_game(self):
         # Reset player position and health
-        self.player_x = WIDTH // 2 - self.player_size // 2
-        self.player_y = HEIGHT - self.player_size - 10
+        self.player_x = self.width // 2 - self.player_size // 2
+        self.player_y = self.height - self.player_size - 10
         self.current_health = self.max_health
         self.invulnerable = False
         self.invulnerable_timer = 0
@@ -145,8 +220,8 @@ class Game:
         # Reset level
         self.level = 1
         self.coins_collected_this_level = 0
-        self.coin_speed = self.base_coin_speed
-        self.obstacle_speed = self.base_obstacle_speed
+        self.coin_speed = self.base_coin_speed * min(scale_x, scale_y)
+        self.obstacle_speed = self.base_obstacle_speed * min(scale_x, scale_y)
 
         # Reset coins and obstacles
         self.coins = [self.create_coin()]
@@ -171,8 +246,12 @@ class Game:
         self.coins_collected_this_level = 0
 
         # Increase speeds based on level
-        self.coin_speed = self.base_coin_speed * (self.level_multiplier ** (self.level - 1))
-        self.obstacle_speed = self.base_obstacle_speed * (self.level_multiplier ** (self.level - 1))
+        self.coin_speed = (self.base_coin_speed *
+                          (self.level_multiplier ** (self.level - 1)) *
+                          min(scale_x, scale_y))
+        self.obstacle_speed = (self.base_obstacle_speed *
+                             (self.level_multiplier ** (self.level - 1)) *
+                             min(scale_x, scale_y))
         self.original_obstacle_speed = self.obstacle_speed
 
         # Add more coins and obstacles as levels progress
@@ -192,11 +271,18 @@ class Game:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return False
-            if event.type == pygame.KEYDOWN and self.game_over:
-                if event.key == pygame.K_r:
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F11:
+                    self.toggle_fullscreen()
+                elif event.key == pygame.K_r and self.game_over:
                     self.reset_game()
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                return False
+                elif event.key == pygame.K_ESCAPE:
+                    if self.fullscreen:
+                        self.toggle_fullscreen()
+                    else:
+                        return False
+            elif event.type == pygame.VIDEORESIZE and not self.fullscreen:
+                self.handle_resize(event.size)
         return True
 
     def update_power_ups(self):
@@ -214,7 +300,7 @@ class Game:
         # Update falling power-ups
         for power_up in self.power_ups[:]:
             power_up.y += self.power_up_speed
-            if power_up.y > HEIGHT:
+            if power_up.y > self.height:
                 self.power_ups.remove(power_up)
 
     def apply_power_up(self, power_up):
@@ -261,18 +347,20 @@ class Game:
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LEFT] and self.player_x > 0:
                 self.player_x -= self.player_speed
-            if keys[pygame.K_RIGHT] and self.player_x < WIDTH - self.player_size:
+            if keys[pygame.K_RIGHT] and self.player_x < self.width - self.player_size:
                 self.player_x += self.player_speed
 
             # Update coins
-            player_rect = pygame.Rect(self.player_x, self.player_y, self.player_size, self.player_size)
+            player_rect = pygame.Rect(self.player_x, self.player_y,
+                                    self.player_size, self.player_size)
             for coin in self.coins[:]:
                 coin['y'] += self.coin_speed
-                if coin['y'] > HEIGHT:
+                if coin['y'] > self.height:
                     self.coins.remove(coin)
                     self.coins.append(self.create_coin())
                 else:
-                    coin_rect = pygame.Rect(coin['x'], coin['y'], self.coin_size, self.coin_size)
+                    coin_rect = pygame.Rect(coin['x'], coin['y'],
+                                          self.coin_size, self.coin_size)
                     if player_rect.colliderect(coin_rect):
                         # Check for double points power-up
                         points = self.level
@@ -290,7 +378,7 @@ class Game:
             # Update obstacles
             for obstacle in self.obstacles[:]:
                 obstacle['y'] += self.obstacle_speed
-                if obstacle['y'] > HEIGHT:
+                if obstacle['y'] > self.height:
                     self.obstacles.remove(obstacle)
                     self.obstacles.append(self.create_obstacle())
                 else:
@@ -312,14 +400,15 @@ class Game:
 
             # Check power-up collisions
             for power_up in self.power_ups[:]:
-                power_up_rect = pygame.Rect(power_up.x, power_up.y, power_up.size, power_up.size)
+                power_up_rect = pygame.Rect(power_up.x, power_up.y,
+                                          power_up.size, power_up.size)
                 if player_rect.colliderect(power_up_rect):
                     self.apply_power_up(power_up)
                     self.power_ups.remove(power_up)
 
     def draw_power_up_status(self):
-        font = pygame.font.Font(None, 24)
-        y_offset = 80
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
+        y_offset = int(80 * scale_y)
 
         for power_up_type, power_up in self.active_power_ups.items():
             if power_up and power_up.active:
@@ -328,7 +417,7 @@ class Game:
                     text = f"{power_up_type.title()}: {time_left:.1f}s"
                     text_surface = font.render(text, True, power_up.color)
                     window.blit(text_surface, (10, y_offset))
-                    y_offset += 25
+                    y_offset += int(25 * scale_y)
 
     def draw_diamond(self, surface, color, x, y, size):
         points = [
@@ -341,10 +430,10 @@ class Game:
 
     def draw_health_bar(self):
         # Health bar background
-        bar_width = 200
-        bar_height = 20
-        bar_x = 10
-        bar_y = 40
+        bar_width = int(200 * scale_x)
+        bar_height = int(20 * scale_y)
+        bar_x = int(10 * scale_x)
+        bar_y = int(40 * scale_y)
         pygame.draw.rect(window, RED, (bar_x, bar_y, bar_width, bar_height))
 
         # Health bar fill
@@ -353,16 +442,16 @@ class Game:
         pygame.draw.rect(window, GREEN, (bar_x, bar_y, health_width, bar_height))
 
         # Health text
-        font = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
         health_text = font.render(f'Health: {int(health_percentage * 100)}%', True, WHITE)
         window.blit(health_text, (bar_x + bar_width + 10, bar_y + 2))
 
     def draw_level_progress(self):
         # Level progress bar
-        bar_width = 200
-        bar_height = 20
-        bar_x = WIDTH - bar_width - 10
-        bar_y = 40
+        bar_width = int(200 * scale_x)
+        bar_height = int(20 * scale_y)
+        bar_x = self.width - bar_width - int(10 * scale_x)
+        bar_y = int(40 * scale_y)
         pygame.draw.rect(window, BLUE, (bar_x, bar_y, bar_width, bar_height))
 
         # Progress fill
@@ -371,7 +460,7 @@ class Game:
         pygame.draw.rect(window, PURPLE, (bar_x, bar_y, progress_width, bar_height))
 
         # Progress text
-        font = pygame.font.Font(None, 24)
+        font = pygame.font.Font(None, int(24 * min(scale_x, scale_y)))
         progress_text = font.render(f'Level Progress: {int(progress * 100)}%', True, WHITE)
         text_rect = progress_text.get_rect(right=bar_x - 10, centery=bar_y + bar_height//2)
         window.blit(progress_text, text_rect)
@@ -380,28 +469,33 @@ class Game:
         window.fill(BLACK)
 
         # Draw player
-        pygame.draw.rect(window, self.player_color, (self.player_x, self.player_y, self.player_size, self.player_size))
+        pygame.draw.rect(window, self.player_color,
+                        (self.player_x, self.player_y, self.player_size, self.player_size))
 
         # Draw coins
         for coin in self.coins:
-            pygame.draw.circle(window, YELLOW, (coin['x'] + self.coin_size//2,
-                                              coin['y'] + self.coin_size//2), self.coin_size//2)
+            pygame.draw.circle(window, YELLOW,
+                             (int(coin['x'] + self.coin_size//2),
+                              int(coin['y'] + self.coin_size//2)),
+                             self.coin_size//2)
 
         # Draw obstacles
         for obstacle in self.obstacles:
-            pygame.draw.rect(window, RED, (obstacle['x'], obstacle['y'],
-                                         self.obstacle_size, self.obstacle_size))
+            pygame.draw.rect(window, RED,
+                           (obstacle['x'], obstacle['y'],
+                            self.obstacle_size, self.obstacle_size))
 
         # Draw power-ups
         for power_up in self.power_ups:
-            self.draw_diamond(window, power_up.color, power_up.x, power_up.y, power_up.size)
+            self.draw_diamond(window, power_up.color,
+                            int(power_up.x), int(power_up.y), power_up.size)
 
         # Draw score and level
-        font = pygame.font.Font(None, 36)
+        font = pygame.font.Font(None, int(36 * min(scale_x, scale_y)))
         score_text = font.render(f'Score: {self.score}', True, WHITE)
         level_text = font.render(f'Level: {self.level}', True, WHITE)
-        window.blit(score_text, (10, 10))
-        window.blit(level_text, (WIDTH - 150, 10))
+        window.blit(score_text, (int(10 * scale_x), int(10 * scale_y)))
+        window.blit(level_text, (self.width - int(150 * scale_x), int(10 * scale_y)))
 
         # Draw health bar and level progress
         self.draw_health_bar()
@@ -413,27 +507,27 @@ class Game:
         # Draw game over screen
         if self.game_over:
             # Create semi-transparent overlay
-            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay = pygame.Surface((self.width, self.height))
             overlay.fill(BLACK)
             overlay.set_alpha(128)
             window.blit(overlay, (0, 0))
 
             # Game Over text
-            game_over_font = pygame.font.Font(None, 74)
+            game_over_font = pygame.font.Font(None, int(74 * min(scale_x, scale_y)))
             game_over_text = game_over_font.render('Game Over!', True, RED)
-            game_over_rect = game_over_text.get_rect(center=(WIDTH//2, HEIGHT//2 - 50))
+            game_over_rect = game_over_text.get_rect(center=(self.width//2, self.height//2 - int(50 * scale_y)))
             window.blit(game_over_text, game_over_rect)
 
             # Final score and level
-            final_score_font = pygame.font.Font(None, 48)
+            final_score_font = pygame.font.Font(None, int(48 * min(scale_x, scale_y)))
             final_score_text = final_score_font.render(f'Final Score: {self.score} - Level: {self.level}', True, WHITE)
-            final_score_rect = final_score_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 20))
+            final_score_rect = final_score_text.get_rect(center=(self.width//2, self.height//2 + int(20 * scale_y)))
             window.blit(final_score_text, final_score_rect)
 
             # Restart instruction
-            restart_font = pygame.font.Font(None, 36)
+            restart_font = pygame.font.Font(None, int(36 * min(scale_x, scale_y)))
             restart_text = restart_font.render('Press R to Restart or ESC to Quit', True, GREEN)
-            restart_rect = restart_text.get_rect(center=(WIDTH//2, HEIGHT//2 + 80))
+            restart_rect = restart_text.get_rect(center=(self.width//2, self.height//2 + int(80 * scale_y)))
             window.blit(restart_text, restart_rect)
 
         pygame.display.flip()
