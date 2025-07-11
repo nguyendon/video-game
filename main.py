@@ -20,8 +20,15 @@ WIDTH = BASE_WIDTH
 HEIGHT = BASE_HEIGHT
 
 # Create resizable window
-window = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE)
+window = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | pygame.SCALED)
 pygame.display.set_caption("Coin Collector")
+
+# For mobile web support
+import platform
+if platform.system() == "Emscripten":
+    import javascript
+    def update_game_over_state(game_over):
+        javascript.window.game_over = game_over
 
 # Scale factor for game objects
 scale_x = 1.0
@@ -260,6 +267,8 @@ class Game:
 
         # Reset game state
         self.game_over = False
+        if platform.system() == "Emscripten":
+            update_game_over_state(False)
 
     def advance_level(self):
         previous_level = self.level
@@ -421,6 +430,8 @@ class Game:
                         self.current_health -= 1
                         if self.current_health <= 0:
                             self.game_over = True
+                            if platform.system() == "Emscripten":
+                                update_game_over_state(True)
                         else:
                             # Start invulnerability period
                             self.invulnerable = True

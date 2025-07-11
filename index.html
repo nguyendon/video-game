@@ -2,7 +2,9 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Coin Collector Game</title>
     <style>
         body {
@@ -16,6 +18,10 @@
             min-height: 100vh;
             color: white;
             font-family: Arial, sans-serif;
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         #status {
             margin: 20px 0;
@@ -25,6 +31,7 @@
             border: 2px solid #666;
             max-width: 100%;
             height: auto;
+            touch-action: none;
         }
         #controls {
             margin-top: 20px;
@@ -33,26 +40,130 @@
             background-color: #333;
             border-radius: 10px;
         }
+        #mobile-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            display: none;
+            justify-content: center;
+            gap: 20px;
+            z-index: 1000;
+        }
+        .control-btn {
+            width: 80px;
+            height: 80px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: white;
+            touch-action: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex;
+            }
+            #controls {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="status">Loading...</div>
     <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    <div id="mobile-controls">
+        <div class="control-btn" id="left-btn">←</div>
+        <div class="control-btn" id="right-btn">→</div>
+    </div>
     <div id="controls">
         <h2>Controls</h2>
-        <p>← → Arrow keys to move</p>
-        <p>R to restart when game over</p>
-        <p>ESC to quit</p>
+        <p>← → Arrow keys or touch buttons to move</p>
+        <p>Tap screen to restart when game over</p>
     </div>
     <script type="text/javascript">
         const status_elem = document.getElementById("status");
-        
+        const leftBtn = document.getElementById("left-btn");
+        const rightBtn = document.getElementById("right-btn");
+        let leftPressed = false;
+        let rightPressed = false;
+
         // Show loading progress
         window.addEventListener("pygame_loaded", function(e) {
             status_elem.innerHTML = "Game loaded!";
             setTimeout(() => {
                 status_elem.style.display = "none";
             }, 2000);
+        });
+
+        // Prevent scrolling on touch devices
+        document.body.addEventListener('touchmove', function(e) {
+            e.preventDefault();
+        }, { passive: false });
+
+        // Touch controls
+        function simulateKeyEvent(type, keyCode) {
+            const event = new KeyboardEvent(type, {
+                bubbles: true,
+                cancelable: true,
+                keyCode: keyCode
+            });
+            document.dispatchEvent(event);
+        }
+
+        function handleStart(direction) {
+            if (direction === 'left') {
+                leftPressed = true;
+                simulateKeyEvent('keydown', 37); // Left arrow
+            } else {
+                rightPressed = true;
+                simulateKeyEvent('keydown', 39); // Right arrow
+            }
+        }
+
+        function handleEnd(direction) {
+            if (direction === 'left') {
+                leftPressed = false;
+                simulateKeyEvent('keyup', 37);
+            } else {
+                rightPressed = false;
+                simulateKeyEvent('keyup', 39);
+            }
+        }
+
+        // Touch events for left button
+        leftBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleStart('left');
+        });
+
+        leftBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleEnd('left');
+        });
+
+        // Touch events for right button
+        rightBtn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            handleStart('right');
+        });
+
+        rightBtn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            handleEnd('right');
+        });
+
+        // Handle game over restart
+        document.addEventListener('touchstart', (e) => {
+            if (window.game_over) {
+                simulateKeyEvent('keydown', 82); // R key
+                simulateKeyEvent('keyup', 82);
+            }
         });
     </script>
 </body>
