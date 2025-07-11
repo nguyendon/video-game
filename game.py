@@ -104,7 +104,7 @@ class Game:
         self.invulnerable_timer = 0
         self.invulnerable_duration = 1500
         self.player_color = WHITE
-        
+
         # Power-up unlock levels
         self.powerup_unlock_levels = {
             POWERUP_HEALTH: 1,      # Health available from start
@@ -112,6 +112,11 @@ class Game:
             POWERUP_SLOW_OBSTACLES: 5,  # Unlocks at level 5
             POWERUP_INVINCIBLE: 7    # Unlocks at level 7
         }
+
+        # Notification settings
+        self.newly_unlocked_powerups = []
+        self.notification_duration = 5000  # 5 seconds
+        self.notification_start = 0
 
         # Level settings
         self.level = 1
@@ -209,11 +214,11 @@ class Game:
             power_up_type for power_up_type, unlock_level in self.powerup_unlock_levels.items()
             if self.level >= unlock_level
         ]
-        
+
         # If no power-ups are available yet, return None
         if not available_power_ups:
             return None
-            
+
         power_up_type = random.choice(available_power_ups)
         return PowerUp(
             random.randint(0, self.width - self.base_powerup_size),
@@ -235,6 +240,7 @@ class Game:
         self.coins_collected_this_level = 0
         self.coin_speed = self.base_coin_speed * min(scale_x, scale_y)
         self.obstacle_speed = self.base_obstacle_speed * min(scale_x, scale_y)
+        self.original_obstacle_speed = self.obstacle_speed  # Reset original speed
 
         # Reset coins and obstacles
         self.coins = [self.create_coin()]
@@ -255,8 +261,17 @@ class Game:
         self.game_over = False
 
     def advance_level(self):
+        previous_level = self.level
         self.level += 1
         self.coins_collected_this_level = 0
+
+        # Check for newly unlocked power-ups
+        self.newly_unlocked_powerups = [
+            power_up_type for power_up_type, unlock_level in self.powerup_unlock_levels.items()
+            if unlock_level == self.level
+        ]
+        if self.newly_unlocked_powerups:
+            self.notification_start = pygame.time.get_ticks()
 
         # Increase speeds based on level
         self.coin_speed = (self.base_coin_speed *
@@ -518,6 +533,31 @@ class Game:
 
         # Draw active power-up status
         self.draw_power_up_status()
+
+        # Draw power-up unlock notifications
+        current_time = pygame.time.get_ticks()
+        if self.newly_unlocked_powerups and current_time - self.notification_start < self.notification_duration:
+            notification_font = pygame.font.Font(None, int(32 * min(scale_x, scale_y)))
+            y_offset = self.height // 4
+
+            # Draw notification background
+            notification_bg = pygame.Surface((self.width // 2, len(self.newly_unlocked_powerups) * 40 + 20))
+            notification_bg.fill(BLACK)
+            notification_bg.set_alpha(200)
+            notification_x = self.width // 4
+            notification_y = y_offset - 10
+            window.blit(notification_bg, (notification_x, notification_y))
+
+            # Draw unlock messages
+            for power_up in self.newly_unlocked_powerups:
+                text = f"New Power-up Unlocked: {power_up.title()}!"
+                text_surface = notification_font.render(text, True, GOLD)
+                text_rect = text_surface.get_rect(center=(self.width // 2, y_offset))
+                window.blit(text_surface, text_rect)
+                y_offset += 40
+        elif self.newly_unlocked_powerups:
+            # Clear notifications after duration
+            self.newly_unlocked_powerups = []
 
         # Draw game over screen
         if self.game_over:
