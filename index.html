@@ -49,6 +49,7 @@
             justify-content: center;
             gap: 20px;
             z-index: 1000;
+            padding: 20px;
         }
         .control-btn {
             width: 80px;
@@ -64,12 +65,19 @@
             touch-action: none;
             -webkit-tap-highlight-color: transparent;
         }
+        .control-btn:active {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
         @media (max-width: 768px) {
             #mobile-controls {
                 display: flex;
             }
             #controls {
                 display: none;
+            }
+            canvas {
+                width: 100% !important;
+                height: auto !important;
             }
         }
     </style>
@@ -90,15 +98,32 @@
         const status_elem = document.getElementById("status");
         const leftBtn = document.getElementById("left-btn");
         const rightBtn = document.getElementById("right-btn");
+        const canvas = document.getElementById("canvas");
+        
         let leftPressed = false;
         let rightPressed = false;
+        let gameStarted = false;
 
         // Show loading progress
         window.addEventListener("pygame_loaded", function(e) {
-            status_elem.innerHTML = "Game loaded!";
-            setTimeout(() => {
+            status_elem.innerHTML = "Game loaded! Tap to start";
+        });
+
+        function startGame() {
+            if (!gameStarted) {
+                gameStarted = true;
                 status_elem.style.display = "none";
-            }, 2000);
+                // Send a spacebar press to start the game
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space' }));
+                window.dispatchEvent(new KeyboardEvent('keyup', { key: ' ', code: 'Space' }));
+            }
+        }
+
+        // Handle game start
+        canvas.addEventListener('click', startGame);
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault();
+            startGame();
         });
 
         // Prevent scrolling on touch devices
@@ -109,11 +134,14 @@
         // Touch controls
         function simulateKeyEvent(type, keyCode) {
             const event = new KeyboardEvent(type, {
+                key: keyCode === 37 ? 'ArrowLeft' : 'ArrowRight',
+                code: keyCode === 37 ? 'ArrowLeft' : 'ArrowRight',
+                keyCode: keyCode,
+                which: keyCode,
                 bubbles: true,
-                cancelable: true,
-                keyCode: keyCode
+                cancelable: true
             });
-            document.dispatchEvent(event);
+            window.dispatchEvent(event);
         }
 
         function handleStart(direction) {
@@ -140,31 +168,50 @@
         leftBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handleStart('left');
-        });
+        }, { passive: false });
 
         leftBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             handleEnd('left');
-        });
+        }, { passive: false });
 
         // Touch events for right button
         rightBtn.addEventListener('touchstart', (e) => {
             e.preventDefault();
             handleStart('right');
-        });
+        }, { passive: false });
 
         rightBtn.addEventListener('touchend', (e) => {
             e.preventDefault();
             handleEnd('right');
-        });
+        }, { passive: false });
 
         // Handle game over restart
-        document.addEventListener('touchstart', (e) => {
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
             if (window.game_over) {
-                simulateKeyEvent('keydown', 82); // R key
-                simulateKeyEvent('keyup', 82);
+                window.dispatchEvent(new KeyboardEvent('keydown', { key: 'r', code: 'KeyR' }));
+                window.dispatchEvent(new KeyboardEvent('keyup', { key: 'r', code: 'KeyR' }));
             }
-        });
+        }, { passive: false });
+
+        // Resize handler
+        function resizeCanvas() {
+            const windowWidth = window.innerWidth;
+            const windowHeight = window.innerHeight;
+            const mobileControls = document.getElementById('mobile-controls');
+            const controlsHeight = mobileControls ? mobileControls.offsetHeight : 0;
+            
+            if (windowWidth <= 768) {
+                const maxHeight = windowHeight - controlsHeight - 40;
+                canvas.style.maxHeight = maxHeight + 'px';
+            } else {
+                canvas.style.maxHeight = 'none';
+            }
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('load', resizeCanvas);
     </script>
 </body>
 </html>

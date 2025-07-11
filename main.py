@@ -603,7 +603,11 @@ async def main():
     clock = pygame.time.Clock()
     game = Game()
     running = True
-
+    
+    # Wait for first interaction
+    if platform.system() == "Emscripten":
+        pygame.event.wait()  # Wait for the first event (touch/click)
+    
     while running:
         running = game.handle_events()
         game.update()
