@@ -104,6 +104,14 @@ class Game:
         self.invulnerable_timer = 0
         self.invulnerable_duration = 1500
         self.player_color = WHITE
+        
+        # Power-up unlock levels
+        self.powerup_unlock_levels = {
+            POWERUP_HEALTH: 1,      # Health available from start
+            POWERUP_DOUBLE_POINTS: 3,  # Unlocks at level 3
+            POWERUP_SLOW_OBSTACLES: 5,  # Unlocks at level 5
+            POWERUP_INVINCIBLE: 7    # Unlocks at level 7
+        }
 
         # Level settings
         self.level = 1
@@ -128,7 +136,7 @@ class Game:
         self.power_ups = []
         self.base_power_up_speed = 2
         self.power_up_speed = self.base_power_up_speed
-        self.power_up_spawn_chance = 0.02
+        self.power_up_spawn_chance = 0.005  # Reduced from 0.02 to 0.005 (0.5% chance)
         self.active_power_ups = {
             POWERUP_INVINCIBLE: None,
             POWERUP_DOUBLE_POINTS: None,
@@ -196,12 +204,17 @@ class Game:
         }
 
     def create_power_up(self):
-        power_up_type = random.choice([
-            POWERUP_INVINCIBLE,
-            POWERUP_DOUBLE_POINTS,
-            POWERUP_HEALTH,
-            POWERUP_SLOW_OBSTACLES
-        ])
+        # Get list of available power-ups based on current level
+        available_power_ups = [
+            power_up_type for power_up_type, unlock_level in self.powerup_unlock_levels.items()
+            if self.level >= unlock_level
+        ]
+        
+        # If no power-ups are available yet, return None
+        if not available_power_ups:
+            return None
+            
+        power_up_type = random.choice(available_power_ups)
         return PowerUp(
             random.randint(0, self.width - self.base_powerup_size),
             random.randint(-100, -30),
@@ -295,7 +308,9 @@ class Game:
 
         # Spawn new power-ups
         if random.random() < self.power_up_spawn_chance:
-            self.power_ups.append(self.create_power_up())
+            new_power_up = self.create_power_up()
+            if new_power_up:  # Only append if a valid power-up was created
+                self.power_ups.append(new_power_up)
 
         # Update falling power-ups
         for power_up in self.power_ups[:]:
